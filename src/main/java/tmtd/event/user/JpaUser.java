@@ -8,7 +8,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface JpaUser extends JpaRepository<EntityUser, Integer>
 // Cùng cấp thì ko cần import file
 {
-// Bạn có thể định nghĩa các phương thức truy vấn tùy chỉnh tại đây
-Optional<EntityUser> findByEmail(String email); // Thêm phương thức tìm kiếm theo email
-List<EntityUser> findByRolesContaining(String roles);  // Tìm User theo vai trò
+    // Bạn có thể định nghĩa các phương thức truy vấn tùy chỉnh tại đây
+    boolean existsByEmailIgnoreCase(String email);
+
+    Optional<EntityUser> findByEmailIgnoreCase(String email);
+
+    Optional<EntityUser> findByEmail(String email); // Thêm phương thức tìm kiếm theo email
+
+    List<EntityUser> findByRolesContaining(String roles); // Tìm User theo vai trò
+
 }

@@ -1,5 +1,6 @@
 
 
+
 // package tmtd.event.events;
 
 // import java.time.Instant;
@@ -27,8 +28,8 @@
 
 //     private final JpaEvents repo;
 //     private final JpaRegistrations registrations; // <- inject thêm
-//     private final JpaAttendance attendance; // <- inject thêm
-//     private final AuthFacade auth; // ⬅️ thêm
+//     private final JpaAttendance attendance;       // <- inject thêm
+//     private final AuthFacade auth;                // ⬅️ thêm
 
 //     // ===== public
 //     @Override
@@ -46,7 +47,7 @@
 //         return map(e);
 //     }
 
-//     // ===== create (giữ nguyên)
+//     // ===== organizer/admin create (cho CHÍNH actor)
 //     @Override
 //     public EventResponse create(EventCreateRequest req) {
 //         Long actorId = auth.currentUserId();
@@ -69,8 +70,8 @@
 //         e.setMainImageUrl(req.mainImageUrl());
 
 //         if (auth.hasRole(Roles.ADMIN)) {
-//             // Admin tạo: approved luôn
-//             e.setOrganizerId(req.organizerId() != null ? req.organizerId() : actorId);
+//             // Admin tạo CHO CHÍNH MÌNH ở endpoint này
+//             e.setOrganizerId(actorId);
 //             e.setStatus(EventStatus.APPROVED);
 //             e.setApprovedBy(actorId);
 //             e.setApprovedAt(Instant.now());
@@ -89,13 +90,50 @@
 //         return map(repo.save(e));
 //     }
 
-//     // ===== createAsOrganizer: implement interface, delegate sang create()
+//     @Override
+// @Transactional(readOnly = true)
+// public List<EventResponse> listApprovedByCategory(String category) {
+//     String cat = category == null ? "" : category.trim();
+//     return repo.findByCategoryIgnoreCaseAndStatus(cat, EventStatus.APPROVED)
+//                .stream()
+//                .map(this::map)
+//                .toList();
+// }
+
+//     // ===== ADMIN tạo thay organizerId chỉ định
 //     @Override
 //     public EventResponse createAsOrganizer(Long organizerId, EventCreateRequest req) {
-//         // Giữ tương thích: dùng chung rule của create()
-//         // organizerId truyền vào sẽ được bỏ qua nếu caller là ORGANIZER
-//         // (đúng theo logic create(): organizerId = actorId cho role ORGANIZER)
-//         return create(req);
+//         if (!auth.hasRole(Roles.ADMIN)) {
+//             throw forbidden("Only ADMIN can create on behalf of an organizer");
+//         }
+
+//         var e = new EntityEvents();
+
+//         if (req.startDate() != null && req.endDate() != null && req.startDate().isAfter(req.endDate())) {
+//             throw bad("startDate must be <= endDate");
+//         }
+
+//         e.setTitle(req.title());
+//         e.setDescription(req.description());
+//         e.setCategory(req.category());
+//         e.setDate(req.date());
+//         e.setStartDate(req.startDate() != null ? req.startDate() : req.date());
+//         e.setEndDate(req.endDate() != null ? req.endDate() : req.date());
+//         e.setTime(req.time());
+//         e.setVenue(req.venue());
+//         e.setTotalSeats(req.totalSeats());
+//         e.setMainImageUrl(req.mainImageUrl());
+
+//         e.setOrganizerId(organizerId);            // gán đúng người được tạo thay
+//         e.setStatus(EventStatus.APPROVED);        // rule: admin tạo là duyệt luôn
+//         e.setApprovedBy(auth.currentUserId());
+//         e.setApprovedAt(Instant.now());
+
+//         if (e.getTotalSeats() != null && e.getTotalSeats() < 0) {
+//             throw bad("totalSeats must be >= 0");
+//         }
+
+//         return map(repo.save(e));
 //     }
 
 //     @Override
@@ -173,7 +211,7 @@
 //         return new EventStatsResponse(e.getEventId(), total, checkedIn, pending);
 //     }
 
-//     // ===== admin
+//     // ===== admin moderation
 //     @Override
 //     public EventResponse approve(Long adminId, Long eventId) {
 //         var e = repo.findById(eventId).orElseThrow(() -> notFound("Event"));
@@ -249,6 +287,7 @@
 // }
 
 
+
 package tmtd.event.events;
 
 import java.time.Instant;
@@ -293,6 +332,17 @@ public class EventsServiceImpl implements EventsService {
         if (e.getStatus() != EventStatus.APPROVED)
             throw forbidden("Event not public");
         return map(e);
+    }
+
+    // ⬇️ BỔ SUNG: lọc theo danh mục, chỉ lấy APPROVED
+    @Override
+    @Transactional(readOnly = true)
+    public List<EventResponse> listApprovedByCategory(String category) {
+        String cat = category == null ? "" : category.trim();
+        return repo.findByCategoryIgnoreCaseAndStatus(cat, EventStatus.APPROVED)
+                   .stream()
+                   .map(this::map)
+                   .toList();
     }
 
     // ===== organizer/admin create (cho CHÍNH actor)
@@ -447,6 +497,16 @@ public class EventsServiceImpl implements EventsService {
         }
 
         return new EventStatsResponse(e.getEventId(), total, checkedIn, pending);
+    }
+
+    // ⬇️ BỔ SUNG: danh sách sự kiện đang chờ duyệt
+    @Override
+    @Transactional(readOnly = true)
+    public List<EventResponse> listPendingApproveEvents() {
+        return repo.findByStatus(EventStatus.PENDING_APPROVAL)
+                   .stream()
+                   .map(this::map)
+                   .toList();
     }
 
     // ===== admin moderation

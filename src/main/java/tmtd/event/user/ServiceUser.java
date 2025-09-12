@@ -1,17 +1,24 @@
 package tmtd.event.user;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import tmtd.event.user.dto.AdminCreateUserRequest;
 import tmtd.event.user.dto.UserResponse;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Arrays;
 
 @Service
+@Transactional
 public class ServiceUser {
+
     private final JpaUser jpaUser;
     private final PasswordEncoder passwordEncoder;
 
@@ -21,25 +28,66 @@ public class ServiceUser {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public EntityUser saveEntityUser(EntityUser entityUser) {
-        // dateJoin đang là java.sql.Date trong EntityUser => set đúng kiểu:
-        entityUser.setDateJoin(new java.sql.Date(System.currentTimeMillis()));
-
-        if (entityUser.getPassword() != null && !entityUser.getPassword().isEmpty()) {
-            entityUser.setPassword(passwordEncoder.encode(entityUser.getPassword()));
-        }
-        if (entityUser.getRoles() == null || entityUser.getRoles().isEmpty()) {
-            entityUser.setRoles("ROLE_USER");
-        }
-        return jpaUser.save(entityUser);
+    // ----------------- Helpers -----------------
+    private static String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase();
     }
 
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    private static boolean looksLikeUniqueEmailViolation(DataIntegrityViolationException ex) {
+        String msg = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : "";
+        if (msg == null) msg = "";
+        msg = msg.toLowerCase();
+        // tùy DB/driver: tên constraint hoặc từ khóa duplicate/unique
+        return msg.contains("uk_entity_user_email") || msg.contains("duplicate") || msg.contains("unique");
+    }
+
+    // ----------------- Public register -----------------
+    public EntityUser saveEntityUser(EntityUser entityUser) {
+        // Chuẩn hóa & mặc định
+        String email = normalizeEmail(entityUser.getEmail());
+        entityUser.setEmail(email);
+        entityUser.setDateJoin(new java.sql.Date(System.currentTimeMillis()));
+
+        if (!isBlank(entityUser.getPassword())) {
+            entityUser.setPassword(passwordEncoder.encode(entityUser.getPassword()));
+        }
+        if (isBlank(entityUser.getRoles())) {
+            entityUser.setRoles("ROLE_USER");
+        }
+
+        // Chặn trùng email: check sớm + bắt ở DB
+        if (!isBlank(email) && jpaUser.existsByEmailIgnoreCase(email)) {
+            throw new EmailAlreadyUsedException(email);
+        }
+
+        try {
+            return jpaUser.save(entityUser);
+        } catch (DataIntegrityViolationException ex) {
+            if (looksLikeUniqueEmailViolation(ex)) {
+                throw new EmailAlreadyUsedException(email);
+            }
+            throw ex;
+        }
+    }
+
+    // ----------------- Password utils -----------------
     public boolean checkPassword(String rawPassword, String encodedPassword) {
         return passwordEncoder.matches(rawPassword, encodedPassword);
     }
 
+    // ----------------- Queries -----------------
     public Optional<EntityUser> findByEmail(String email) {
-        return jpaUser.findByEmail(email);
+        String norm = normalizeEmail(email);
+        // Ưu tiên ignore-case; fallback nếu bạn chưa thêm method ở JpaUser
+        try {
+            return jpaUser.findByEmailIgnoreCase(norm);
+        } catch (Throwable t) {
+            return jpaUser.findByEmail(norm);
+        }
     }
 
     public Page<EntityUser> findAll(Pageable pageable) {
@@ -67,36 +115,50 @@ public class ServiceUser {
         return jpaUser.findByRolesContaining(roles);
     }
 
-    // --- ADMIN tạo organizer mới ---
-    public tmtd.event.user.dto.UserResponse adminCreateOrganizer(tmtd.event.user.dto.AdminCreateUserRequest req) {
-        var u = new tmtd.event.user.EntityUser();
-        u.setEmail(req.email());
+    // ----------------- Admin ops -----------------
+    // ADMIN tạo organizer mới
+    public UserResponse adminCreateOrganizer(AdminCreateUserRequest req) {
+        String email = normalizeEmail(req.email());
+
+        if (jpaUser.existsByEmailIgnoreCase(email)) {
+            throw new EmailAlreadyUsedException(email);
+        }
+
+        var u = new EntityUser();
+        u.setEmail(email);
         u.setFullName(req.fullName());
         u.setPassword(passwordEncoder.encode(req.password()));
-        u.setRoles("ROLE_USER,ROLE_ORGANIZER"); // ép cứng
-        // EntityUser.dateJoin là java.sql.Date:
+        u.setRoles("ROLE_USER,ROLE_ORGANIZER");
         u.setDateJoin(new java.sql.Date(System.currentTimeMillis()));
 
-        var saved = jpaUser.save(u);
-
-        // Nếu UserResponse.userId là Long, mà saved.getUser_id() là Integer -> convert:
-        Long uid = (saved.getUser_id() == null) ? null : Long.valueOf(saved.getUser_id());
-        return new tmtd.event.user.dto.UserResponse(uid, saved.getEmail(), saved.getFullName(), saved.getRoles());
+        try {
+            var saved = jpaUser.save(u);
+            Long uid = (saved.getUser_id() == null) ? null : Long.valueOf(saved.getUser_id());
+            return new UserResponse(uid, saved.getEmail(), saved.getFullName(), saved.getRoles());
+        } catch (DataIntegrityViolationException ex) {
+            if (looksLikeUniqueEmailViolation(ex)) {
+                throw new EmailAlreadyUsedException(email);
+            }
+            throw ex;
+        }
     }
 
-    // --- ADMIN nâng cấp role cho user hiện có ---
-    public tmtd.event.user.dto.UserResponse addRole(Integer userId, String role) { // dùng Integer cho khớp Repo
+    // ADMIN nâng cấp role cho user hiện có
+    public UserResponse addRole(Integer userId, String role) {
         var u = jpaUser.findById(userId).orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        var roles = (u.getRoles() == null || u.getRoles().isBlank()) ? "" : u.getRoles();
-        var list = new java.util.LinkedHashSet<>(java.util.Arrays.stream(roles.split(","))
-                .map(String::trim).filter(s -> !s.isEmpty()).toList());
-        list.add(role);
-        u.setRoles(String.join(",", list));
+        String roles = isBlank(u.getRoles()) ? "" : u.getRoles();
+        var set = new LinkedHashSet<>(
+                Arrays.stream(roles.split(","))
+                      .map(String::trim)
+                      .filter(s -> !s.isEmpty())
+                      .toList()
+        );
+        set.add(role);
+        u.setRoles(String.join(",", set));
 
         var saved = jpaUser.save(u);
-
         Long uid = (saved.getUser_id() == null) ? null : Long.valueOf(saved.getUser_id());
-        return new tmtd.event.user.dto.UserResponse(uid, saved.getEmail(), saved.getFullName(), saved.getRoles());
+        return new UserResponse(uid, saved.getEmail(), saved.getFullName(), saved.getRoles());
     }
 }

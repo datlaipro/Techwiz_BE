@@ -63,6 +63,8 @@ public interface JpaEvents extends JpaRepository<EntityEvents, Long>,
 
     List<EntityEvents> findByOrganizerId(Long organizerId);
 
+    List<EntityEvents> findByCategoryIgnoreCaseAndStatus(String category, EventStatus status);
+
     boolean existsByEventIdAndOrganizerId(Long eventId, Long organizerId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
