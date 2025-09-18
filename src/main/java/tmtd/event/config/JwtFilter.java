@@ -24,6 +24,7 @@ import tmtd.event.auth.JwtUtil;
 @Component
 @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JwtFilter.class);
 
     private final JwtUtil jwtUtil;
 
@@ -31,41 +32,39 @@ public class JwtFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
+        final String path = req.getServletPath(); // quan trọng nếu có context-path
+        log.debug("[JwtFilter] {} {}", req.getMethod(), path);
+
         String authHeader = req.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            // res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            log.debug("[JwtFilter] No Authorization header, pass through");
             chain.doFilter(req, res);
             return;
         }
 
         String token = authHeader.substring(7);
         if (!jwtUtil.validateToken(token)) {
+            log.warn("[JwtFilter] validateToken=false for {}", path);
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
 
         String email = jwtUtil.extractEmail(token);
         Integer userIdInt = jwtUtil.extractUserId(token);
-        Long userId = userIdInt != null ? userIdInt.longValue() : null;
+        String rolesStr = jwtUtil.extractRoles(token);
 
-        String rolesStr = jwtUtil.extractRoles(token); // ví dụ: "ROLE_USER,ROLE_ORGANIZER"
-        List<SimpleGrantedAuthority> authorities =
-                (rolesStr == null || rolesStr.isBlank())
-                        ? Collections.emptyList()
-                        : Arrays.stream(rolesStr.split(","))
-                                .map(String::trim)
-                                .filter(s -> !s.isEmpty())
-                                .map(SimpleGrantedAuthority::new)
-                                .collect(Collectors.toList());
+        List<SimpleGrantedAuthority> authorities = (rolesStr == null || rolesStr.isBlank())
+                ? java.util.Collections.emptyList()
+                : java.util.Arrays.stream(rolesStr.split(","))
+                        .map(String::trim).filter(s -> !s.isEmpty())
+                        .map(SimpleGrantedAuthority::new).toList();
 
-        var principal = new UserPrincipal(userId, email, rolesStr);
-        Authentication authentication =
-                new UsernamePasswordAuthenticationToken(principal, null, authorities);
-        ((UsernamePasswordAuthenticationToken) authentication)
-                .setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
+        log.debug("[JwtFilter] principal={}, rolesStr={}, authorities={}", email, rolesStr, authorities);
 
-        org.springframework.security.core.context.SecurityContextHolder.getContext()
-                .setAuthentication(authentication);
+        var principal = new UserPrincipal(userIdInt != null ? userIdInt.longValue() : null, email, rolesStr);
+        var authentication = new UsernamePasswordAuthenticationToken(principal, null, authorities);
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
 
         chain.doFilter(req, res);
     }
@@ -74,33 +73,40 @@ public class JwtFilter extends OncePerRequestFilter {
      * Bỏ qua filter cho:
      * - Preflight CORS (OPTIONS /**)
      * - Endpoint public đồng nhất với SecurityConfig:
-     *   POST /api/auth/login
-     *   POST /api/user
-     *   GET  /api/events/**
-     *   GET  /api/feedback/**
-     *   GET  /api/review/**
+     * POST /api/auth/login
+     * POST /api/user
+     * GET /api/events/**
+     * GET /api/feedback/**
+     * GET /api/review/**
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
-        final String path = req.getRequestURI();
+        final String path = req.getServletPath();
         final String method = req.getMethod();
 
-        // Preflight
-        if (HttpMethod.OPTIONS.matches(method)) return true;
+        if (HttpMethod.OPTIONS.matches(method))
+            return true;
 
-        // Public: khớp với SecurityConfig
-        if (HttpMethod.POST.matches(method) && "/api/auth/login".equals(path)) return true;
-        if (HttpMethod.POST.matches(method) && "/api/user".equals(path)) return true;
-   if (HttpMethod.POST.matches(method) && "/api/user/register".equals(path)) return true;  // ✅ THÊM DÒNG NÀY
+        if (HttpMethod.POST.matches(method) && "/api/auth/login".equals(path))
+            return true;
+        if (HttpMethod.POST.matches(method) && "/api/user".equals(path))
+            return true;
+        if (HttpMethod.POST.matches(method) && "/api/user/register".equals(path))
+            return true;
+
         if (HttpMethod.GET.matches(method)) {
-            if (path.startsWith("/api/events")) return true;
-            if (path.startsWith("/api/feedback")) return true;
-            if (path.startsWith("/api/review")) return true;
+            if (path.startsWith("/api/events"))
+                return true;
+            if (path.startsWith("/api/feedback"))
+                return true;
+            if (path.startsWith("/api/review"))
+                return true;
         }
-
+        // KHÔNG bỏ qua /api/admin/**
         return false;
     }
 
     // Principal tối giản để Controller/Service dùng khi cần
-    public record UserPrincipal(Long userId, String email, String roles) {}
+    public record UserPrincipal(Long userId, String email, String roles) {
+    }
 }

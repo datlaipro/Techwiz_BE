@@ -50,4 +50,6 @@ public interface ServiceRegistrations {
     RegistrationResponse approveRegistration(Long eventId, Long registrationId, Long actorId);
 
     RegistrationResponse rejectRegistration(Long eventId, Long registrationId, Long actorId);
+
+    RegistrationResponse cancelOwnRegistration(Long registrationId, Long currentUserId);
 }

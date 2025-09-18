@@ -1,39 +1,4 @@
-// package tmtd.event.admin;
 
-// import lombok.RequiredArgsConstructor;
-// import org.springframework.security.access.prepost.PreAuthorize;
-// import org.springframework.web.bind.annotation.*;
-// import tmtd.event.events.EventsService;
-// import tmtd.event.events.dto.EventResponse;
-// import tmtd.event.events.EventsService.SystemStatsResponse;
-// import tmtd.event.config.AuthFacade;
-
-// @RestController
-// @RequestMapping("/api/admin")
-// @RequiredArgsConstructor
-// public class AdminController {
-
-//     private final EventsService events;
-//     private final AuthFacade auth;
-
-//     @PostMapping("/events/{id}/approve")
-//     @PreAuthorize("hasRole('ADMIN')")
-//     public EventResponse approve(@PathVariable Long id){
-//         return events.approve(auth.currentUserId(), id);
-//     }
-
-//     @PostMapping("/events/{id}/reject")
-//     @PreAuthorize("hasRole('ADMIN')")
-//     public EventResponse reject(@PathVariable Long id){
-//         return events.reject(auth.currentUserId(), id);
-//     }
-
-//     @GetMapping("/stats/overview")
-//     @PreAuthorize("hasRole('ADMIN')")
-//     public SystemStatsResponse overview(){
-//         return events.systemStats();
-//     }
-// }
 
 
 package tmtd.event.admin;
@@ -80,5 +45,6 @@ public class AdminController {
         return events.systemStats();
     }
 }
+
 
 

@@ -54,8 +54,18 @@ public class JwtUtil {
         try {
             Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
             return true;
+        } catch (ExpiredJwtException e) {
+            System.out.println("[JwtUtil] Token expired at: " + e.getClaims().getExpiration());
+        } catch (UnsupportedJwtException e) {
+            System.out.println("[JwtUtil] Unsupported JWT: " + e.getMessage());
+        } catch (MalformedJwtException e) {
+            System.out.println("[JwtUtil] Malformed JWT: " + e.getMessage());
+        } catch (SecurityException e) {
+            System.out.println("[JwtUtil] Signature invalid: " + e.getMessage());
         } catch (JwtException e) {
-            return false;
+            System.out.println("[JwtUtil] JWT error: " + e.getMessage());
         }
+        return false;
     }
+
 }

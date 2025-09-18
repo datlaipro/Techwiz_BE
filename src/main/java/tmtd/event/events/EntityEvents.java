@@ -1,3 +1,5 @@
+
+
 package tmtd.event.events;
 
 import java.time.Instant;
@@ -7,7 +9,20 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import tmtd.event.events.image.EntityImage;
 
 @Entity
@@ -43,7 +58,7 @@ public class EntityEvents {
     // Map đúng tên cột trong DB: approval_status
     @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", nullable = false, length = 20)
-    private EventStatus status = EventStatus.DRAFT; // hoặc PENDING nếu bạn muốn mặc định đang chờ duyệt
+    private EventStatus status = EventStatus.DRAFT; // hoặc PENDING nếu muốn mặc định chờ duyệt
 
     @Column(name = "approved_by")
     private Long approvedBy;
@@ -51,12 +66,21 @@ public class EntityEvents {
     @Column(name = "approved_at")
     private Instant approvedAt;
 
-    // Sức chứa (có thể null nếu không giới hạn)
+    // Sức chứa thiết kế (có thể null nếu không giới hạn)
     private Integer totalSeats;
 
-    // Ảnh đại diện chính (thumbnail/banner) — để FE gửi lên dưới dạng URL
+    // GHẾ CÒN TRỐNG: dùng để trừ/bù khi đăng ký/hủy
+    @Column(name = "seats_available", nullable = false)
+    private Integer seatsAvailable = 0;
+
+    // Ảnh đại diện chính (thumbnail/banner)
     @Column(name = "main_image_url", length = 512)
     private String mainImageUrl;
+
+    // Optimistic locking
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     // Thời điểm tạo/cập nhật
     @Column(nullable = false, updatable = false)
@@ -65,16 +89,22 @@ public class EntityEvents {
     @Column(nullable = false)
     private OffsetDateTime updatedAt = OffsetDateTime.now();
 
-        // ⬇️ Thêm 2 trường NGÀY BẮT ĐẦU / KẾT THÚC
+    // Sự kiện nhiều ngày
     @Column(name = "start_date")
-    private LocalDate startDate;   // sự kiện nhiều ngày: ngày bắt đầu
+    private LocalDate startDate;
 
     @Column(name = "end_date")
-    private LocalDate endDate;     // sự kiện nhiều ngày: ngày kết thúc
+    private LocalDate endDate;
 
     // Gallery ảnh (bảng media_gallery)
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<EntityImage> images = new ArrayList<>();
+
+    @PrePersist
+    public void onCreate() {
+        if (createdAt == null) createdAt = OffsetDateTime.now();
+        if (updatedAt == null) updatedAt = createdAt;
+    }
 
     @PreUpdate
     public void touch() {
@@ -118,8 +148,14 @@ public class EntityEvents {
     public Integer getTotalSeats() { return totalSeats; }
     public void setTotalSeats(Integer totalSeats) { this.totalSeats = totalSeats; }
 
+    public Integer getSeatsAvailable() { return seatsAvailable; }
+    public void setSeatsAvailable(Integer seatsAvailable) { this.seatsAvailable = seatsAvailable; }
+
     public String getMainImageUrl() { return mainImageUrl; }
     public void setMainImageUrl(String mainImageUrl) { this.mainImageUrl = mainImageUrl; }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
@@ -127,10 +163,10 @@ public class EntityEvents {
     public List<EntityImage> getImages() { return images; }
     public void setImages(List<EntityImage> images) { this.images = images; }
 
-        // ⬇️ Thêm getters/setters cho 2 trường mới
     public LocalDate getStartDate() { return startDate; }
     public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
 
     public LocalDate getEndDate() { return endDate; }
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
 }
+

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Đăng ký thành công</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin:0; padding:0; background:#f6f8fb;}
+    .wrap {max-width:640px; margin:0 auto; padding:24px;}
+    .card {background:#fff; border-radius:12px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,.06);}
+    h1 {font-size:20px; margin:0 0 16px;}
+    .muted {color:#6b7280; font-size:14px;}
+    .row {margin:8px 0;}
+    .btn {
+      display:inline-block; text-decoration:none; padding:10px 16px; border-radius:10px;
+      background:#2563eb; color:#fff; font-weight:600;
+    }
+    .footer {text-align:center; color:#9ca3af; font-size:12px; margin-top:16px;}
+    code {background:#f3f4f6; padding:2px 6px; border-radius:6px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>🎉 Đăng ký thành công!</h1>
+      <p class="muted">Cảm ơn bạn đã đăng ký tham dự sự kiện.</p>
+
+      <div class="row">Sự kiện: <strong th:text="${eventTitle}">Event title</strong></div>
+      <div class="row">Mã sự kiện: <code th:text="${eventId}">0</code></div>
+      <div class="row">Mã đăng ký: <code th:text="${registrationId}">0</code></div>
+
+      <!-- Ví dụ link chi tiết (tùy backend có route hay không) -->
+      <!-- <p style="margin-top:16px">
+        <a class="btn" th:href="@{'https://your-frontend/events/' + ${eventId}}">Xem chi tiết</a>
+      </p> -->
+    </div>
+    <div class="footer">EventSphere • Đây là email tự động, vui lòng không trả lời.</div>
+  </div>
+</body>
+</html>

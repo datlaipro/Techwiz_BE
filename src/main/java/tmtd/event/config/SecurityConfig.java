@@ -1,3 +1,4 @@
+
 // package tmtd.event.config;
 
 // import org.springframework.context.annotation.Bean;
@@ -17,6 +18,7 @@
 // import org.springframework.security.web.SecurityFilterChain;
 // import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+// import jakarta.servlet.http.HttpServletResponse;
 // import lombok.RequiredArgsConstructor;
 
 // @Configuration
@@ -25,34 +27,60 @@
 // @RequiredArgsConstructor
 // public class SecurityConfig {
 
-//     private final tmtd.event.config.JwtFilter jwtFilter;
+//     private final JwtFilter jwtFilter;
+//     // Không dùng form-login, chỉ để thỏa bean phụ thuộc
 //     private final UserDetailsService userDetailsService = username -> null;
 
 //     @Bean
 //     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 //         return http
-//                 .csrf(csrf -> csrf.disable())
-//                 .cors(Customizer.withDefaults()) // dùng CorsConfigurationSource từ CorsConfig
-//                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-//                 .authorizeHttpRequests(auth -> auth
-//                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // preflight
-//                         // Public
-//                         .requestMatchers(HttpMethod.POST, "/api/user/register").permitAll()     // ✅ THÊM DÒNG NÀY
-//                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-//                         .requestMatchers(HttpMethod.POST, "/api/user").permitAll()
-//                         .requestMatchers(HttpMethod.GET, "/api/events/**").permitAll()
-//                         .requestMatchers(HttpMethod.GET, "/api/feedback/**").permitAll()
-//                         .requestMatchers(HttpMethod.GET, "/api/review/**").permitAll()
-//                         // Role-based
-//                         .requestMatchers("/api/admin/**").hasRole(Roles.ADMIN)
-//                         .requestMatchers(HttpMethod.POST, "/api/events").hasRole(Roles.ADMIN)
+//             .csrf(csrf -> csrf.disable())
+//             .cors(Customizer.withDefaults()) // dùng CorsConfigurationSource từ CorsConfig
+//             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+//             .exceptionHandling(eh -> eh.authenticationEntryPoint((req, resp, ex) -> {
+//                 resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+//                 resp.setContentType("application/json;charset=UTF-8");
+//                 resp.getWriter().write("{\"error\":\"unauthorized\",\"message\":\""
+//                         + ex.getMessage() + "\",\"path\":\"" + req.getRequestURI() + "\"}");
+//             }))
+//             .authorizeHttpRequests(auth -> auth
+//                 // Preflight
+//                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-//                         .requestMatchers("/api/organizer/**").hasRole(Roles.ORGANIZER)
-//                         .requestMatchers("/api/registrations/**").hasRole(Roles.USER)
-//                         // Còn lại yêu cầu JWT
-//                         .anyRequest().authenticated())
-//                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-//                 .build();
+//                 // PUBLIC
+//                 .requestMatchers(HttpMethod.POST, "/api/user/register").permitAll()
+//                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+//                 .requestMatchers(HttpMethod.POST, "/api/user").permitAll()
+//                 .requestMatchers(HttpMethod.GET,  "/api/events/**").permitAll()
+//                 .requestMatchers(HttpMethod.GET,  "/api/feedback/**").permitAll()
+//                 .requestMatchers(HttpMethod.GET,  "/api/review/**").permitAll()
+
+//                 // QR
+//                 .requestMatchers(HttpMethod.POST, "/api/qr/issue")
+//                     .hasAnyRole(Roles.USER, Roles.ORGANIZER, Roles.ADMIN)
+//                 .requestMatchers(HttpMethod.POST, "/api/qr/redeem")
+//                     .hasAnyRole(Roles.ORGANIZER, Roles.ADMIN)
+
+//                 // Admin zone
+//                 .requestMatchers("/api/admin/**").hasRole(Roles.ADMIN)
+
+//                 // Organizer zone (cho cả ADMIN)
+//                 .requestMatchers("/api/organizer/**")
+//                     .hasAnyRole(Roles.ADMIN, Roles.ORGANIZER)
+
+//                 // Cách A (khuyến nghị):
+//                 // KHÔNG mở quyền POST /api/events cho ADMIN nữa; chặn cứng nếu có ai để endpoint này.
+//                 .requestMatchers(HttpMethod.POST, "/api/events").denyAll()
+
+//                 // Đăng ký tham dự
+//                 .requestMatchers(HttpMethod.POST, "/api/registrations").hasRole(Roles.USER)
+//                 .requestMatchers("/api/registrations/**").authenticated()
+
+//                 // Còn lại yêu cầu JWT
+//                 .anyRequest().authenticated()
+//             )
+//             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+//             .build();
 //     }
 
 //     @Bean
@@ -60,6 +88,7 @@
 //         return new BCryptPasswordEncoder();
 //     }
 
+//     // AuthenticationManager “no-op” (không dùng form-login), để thỏa phụ thuộc
 //     @Bean
 //     public AuthenticationManager authenticationManager(PasswordEncoder encoder) {
 //         DaoAuthenticationProvider p = new DaoAuthenticationProvider();
@@ -68,12 +97,6 @@
 //         return new ProviderManager(p);
 //     }
 // }
-
-
-
-
-
-
 
 package tmtd.event.config;
 
@@ -93,6 +116,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -104,58 +130,80 @@ import lombok.RequiredArgsConstructor;
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
-    // Không dùng form-login, chỉ để thỏa bean phụ thuộc
     private final UserDetailsService userDetailsService = username -> null;
+
+    @Bean
+    CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration cfg = new CorsConfiguration();
+        // FE localhost:3000 hoặc domain thật của bạn
+        cfg.setAllowedOrigins(java.util.List.of("http://localhost:3000"));
+        cfg.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        // PHẢI cho phép Authorization để Bearer token qua được
+        cfg.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Accept"));
+        // Nếu bạn không dùng cookie thì để false là an toàn
+        cfg.setAllowCredentials(false);
+        cfg.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", cfg);
+        return source;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
-            .csrf(csrf -> csrf.disable())
-            .cors(Customizer.withDefaults()) // dùng CorsConfigurationSource từ CorsConfig
-            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .exceptionHandling(eh -> eh.authenticationEntryPoint((req, resp, ex) -> {
-                resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                resp.setContentType("application/json;charset=UTF-8");
-                resp.getWriter().write("{\"error\":\"unauthorized\",\"message\":\""
-                        + ex.getMessage() + "\",\"path\":\"" + req.getRequestURI() + "\"}");
-            }))
-            .authorizeHttpRequests(auth -> auth
-                // Preflight
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(eh -> eh.authenticationEntryPoint((req, resp, ex) -> {
+                    resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    resp.setContentType("application/json;charset=UTF-8");
+                    resp.getWriter().write("{\"error\":\"unauthorized\",\"message\":\""
+                            + ex.getMessage() + "\",\"path\":\"" + req.getRequestURI() + "\"}");
+                }))
+                .authorizeHttpRequests(auth -> auth
+                        // Preflight
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // PUBLIC
-                .requestMatchers(HttpMethod.POST, "/api/user/register").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/user").permitAll()
-                .requestMatchers(HttpMethod.GET,  "/api/events/**").permitAll()
-                .requestMatchers(HttpMethod.GET,  "/api/feedback/**").permitAll()
-                .requestMatchers(HttpMethod.GET,  "/api/review/**").permitAll()
+                        // PUBLIC API
+                        .requestMatchers(HttpMethod.POST, "/api/user/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/user").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/events/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/feedback/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/review/**").permitAll()
+                        // ✅ mở endpoint test mail (GET hoặc POST đều được vì bạn đã disable CSRF)
+                        .requestMatchers("/test-mail").permitAll()
+                        .requestMatchers("/ws/**", "/topic/**", "/app/**").permitAll()
 
-                // QR: issue cần USER/ORGANIZER/ADMIN; redeem khóa cho ORGANIZER/ADMIN
-                .requestMatchers(HttpMethod.POST, "/api/qr/issue")
-                    .hasAnyRole(Roles.USER, Roles.ORGANIZER, Roles.ADMIN)
-                .requestMatchers(HttpMethod.POST, "/api/qr/redeem")
-                    .hasAnyRole(Roles.ORGANIZER, Roles.ADMIN)
+                        // WS & Broker (mở công khai, có thể thêm interceptor nếu cần auth)
+                        .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/topic/**", "/app/**").permitAll()
 
-                // Admin zone
-                .requestMatchers("/api/admin/**").hasRole(Roles.ADMIN)
+                        // QR
+                        .requestMatchers(HttpMethod.POST, "/api/qr/issue")
+                        .hasAnyRole(Roles.USER, Roles.ORGANIZER, Roles.ADMIN)
+                        .requestMatchers(HttpMethod.POST, "/api/qr/redeem")
+                        .hasAnyRole(Roles.ORGANIZER, Roles.ADMIN)
 
-                // Organizer zone (cho cả ADMIN)
-                .requestMatchers("/api/organizer/**")
-                    .hasAnyRole(Roles.ADMIN, Roles.ORGANIZER)
+                        // Admin zone
+                        .requestMatchers("/api/admin/**").hasRole(Roles.ADMIN)
 
-                // Events tạo mới: tuỳ policy của bạn, ở đây để ADMIN tạo
-                .requestMatchers(HttpMethod.POST, "/api/events").hasRole(Roles.ADMIN)
+                        // Organizer zone
+                        .requestMatchers("/api/organizer/**")
+                        .hasAnyRole(Roles.ADMIN, Roles.ORGANIZER)
 
-                // Registrations: POST phải là USER; các API còn lại dưới /api/registrations/** chỉ cần authenticated
-                .requestMatchers(HttpMethod.POST, "/api/registrations").hasRole(Roles.USER)
-                .requestMatchers("/api/registrations/**").authenticated()
+                        // Chặn POST /api/events
+                        .requestMatchers(HttpMethod.POST, "/api/events").denyAll()
 
-                // Các route còn lại yêu cầu JWT
-                .anyRequest().authenticated()
-            )
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-            .build();
+                        // Đăng ký
+                        .requestMatchers(HttpMethod.POST, "/api/registrations").hasRole(Roles.USER)
+                        .requestMatchers("/api/registrations/**").authenticated()
+
+                        // Còn lại yêu cầu JWT
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .build();
     }
 
     @Bean
@@ -163,7 +211,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // AuthenticationManager “no-op” (không dùng form-login), để thỏa phụ thuộc
     @Bean
     public AuthenticationManager authenticationManager(PasswordEncoder encoder) {
         DaoAuthenticationProvider p = new DaoAuthenticationProvider();
@@ -171,4 +218,5 @@ public class SecurityConfig {
         p.setUserDetailsService(userDetailsService);
         return new ProviderManager(p);
     }
+
 }
