@@ -18,7 +18,7 @@ public class EntityAttendance {
   private Long eventId;
 
   @Column(name = "student_id", nullable = false)
-  private Integer studentId;
+  private Long studentId;
 
   @Column(name = "attended", nullable = false)
   private boolean attended = true;
@@ -33,8 +33,8 @@ public class EntityAttendance {
   public void setAttendanceId(Long attendanceId) { this.attendanceId = attendanceId; }
   public Long getEventId() { return eventId; }
   public void setEventId(Long eventId) { this.eventId = eventId; }
-  public Integer getStudentId() { return studentId; }
-  public void setStudentId(Integer studentId) { this.studentId = studentId; }
+  public Long getStudentId() { return studentId; }
+  public void setStudentId(Long studentId) { this.studentId = studentId; }
   public boolean isAttended() { return attended; }
   public void setAttended(boolean attended) { this.attended = attended; }
   public Instant getMarkedOn() { return markedOn; }

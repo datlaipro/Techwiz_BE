@@ -10,11 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface JpaAttendance extends JpaRepository<EntityAttendance, Long> {
 
-  Optional<EntityAttendance> findByEventIdAndStudentId(Long eventId, Integer studentId);
+  Optional<EntityAttendance> findByEventIdAndStudentId(Long eventId, Long studentId);
   List<EntityAttendance> findByEventId(Long eventId);
 
   @Query("select count(distinct a.studentId) from EntityAttendance a where a.eventId = :eventId")
-  long countDistinctAttendees(@Param("eventId") Long eventId);
+  Long countDistinctAttendees(@Param("eventId") Long eventId);
 
   // native upsert-lite (insert once)
   @Transactional
@@ -27,6 +27,6 @@ public interface JpaAttendance extends JpaRepository<EntityAttendance, Long> {
       )
       """, nativeQuery = true)
   int markAttendedOnce(@Param("eventId") Long eventId,
-                       @Param("studentId") Integer studentId,
+                       @Param("studentId") Long studentId,
                        @Param("method") String method);
 }

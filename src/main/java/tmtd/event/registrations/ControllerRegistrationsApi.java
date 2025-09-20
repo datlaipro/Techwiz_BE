@@ -7,7 +7,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
+import tmtd.event.registrations.dto.RegistrationEventItem; // DTO bạn đã tạo
+import tmtd.event.registrations.RegistrationStatus; // nếu chưa import
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import tmtd.event.config.AuthFacade;
@@ -15,6 +16,10 @@ import tmtd.event.events.EventStatus;
 import tmtd.event.events.JpaEvents;
 import tmtd.event.registrations.dto.RegistrationCreateRequest;
 import tmtd.event.registrations.dto.RegistrationResponse;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.data.domain.Page;
+
 
 @RestController
 @RequestMapping("/api/registrations")
@@ -26,7 +31,8 @@ public class ControllerRegistrationsApi {
     private final AuthFacade auth;
 
     @PostMapping
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAnyRole('USER','ORGANIZER','ADMIN')") // cho phép tất cả role có quyền đăng kí tham gia sự kiện
+                                                            // cho đồng nhất với file security config
     public RegistrationResponse register(@Valid @RequestBody RegistrationCreateRequest req) {
         // 1) kiểm tra event
         var e = events.findById(req.getEventId())
@@ -36,7 +42,7 @@ public class ControllerRegistrationsApi {
         }
 
         // 2) gắn studentId từ token (Repo của bạn dùng Integer)
-        Integer studentId = auth.currentUserId() == null ? null : auth.currentUserId().intValue();
+        Long studentId = auth.currentUserId() == null ? null : auth.currentUserId();
         req.setStudentId(studentId);
 
         // 3) đẩy sang service đúng chữ ký (nhận DTO)
@@ -58,9 +64,22 @@ public class ControllerRegistrationsApi {
     }
 
     @PostMapping("/{regId}/cancel")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAnyRole('USER','ORGANIZER','ADMIN')")
     public RegistrationResponse cancelSelf(@PathVariable Long regId) {
         return service.cancelOwnRegistration(regId, auth.currentUserId());
+    }
+
+    @GetMapping("/users/{userId}/events")// api trả về thông tin các sự kiện mà user đã đăng kí 
+    @PreAuthorize("hasAnyRole('USER','ORGANIZER','ADMIN')")
+    public Page<RegistrationEventItem> listUserRegisteredEvents(
+            @PathVariable Long userId,
+            @RequestParam(required = false) RegistrationStatus status, // PENDING|CONFIRMED|CANCELLED
+            @RequestParam(name = "when", required = false) String whenMode, // ALL|UPCOMING|PAST
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        // Ủy quyền chi tiết đã kiểm trong Service (chỉ xem được của chính mình trừ khi
+        // là ADMIN)
+        return service.listRegisteredEventsOfUser(userId, status, whenMode, page, size);
     }
 
 }

@@ -15,6 +15,6 @@ public record EventUpdateRequest(
     LocalDate startDate,
     LocalDate endDate,
     String venue,
-    Integer totalSeats,
+    Long totalSeats,
     String mainImageUrl // <-- thêm
 ) {}

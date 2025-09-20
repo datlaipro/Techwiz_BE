@@ -29,7 +29,7 @@ public class AdminUserController {
     // Admin nâng cấp user hiện có thành organizer
     @PostMapping("/{id}/roles/organizer")
     @PreAuthorize("hasRole('ADMIN')")
-    public UserResponse grantOrganizer(@PathVariable Integer id) { // ⬅ đổi Long -> Integer
+    public UserResponse grantOrganizer(@PathVariable Long id) { // ⬅ đổi Long -> Integer
         return userService.addRole(id, "ROLE_ORGANIZER");
     }
 }

@@ -12,5 +12,5 @@ import jakarta.validation.constraints.NotNull;
 public record QrIssueRequest(
         @NotNull @Min(1) Long eventId,      // [ADD] Bắt buộc, ID sự kiện
         @NotNull @Min(1) Long studentId,    // [ADD] Bắt buộc, ID học viên
-        Integer size                        // [ADD] Tùy chọn: kích thước QR code
+        Long size                        // [ADD] Tùy chọn: kích thước QR code
 ) {}

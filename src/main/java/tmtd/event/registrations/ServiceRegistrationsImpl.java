@@ -7,6 +7,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import static org.springframework.http.HttpStatus.CONFLICT;
+import org.springframework.http.HttpStatus;
 
 import tmtd.event.config.AuthFacade;
 import tmtd.event.config.Roles;
@@ -43,55 +46,121 @@ public class ServiceRegistrationsImpl implements ServiceRegistrations {
     @Override
     @Transactional
     public RegistrationResponse register(RegistrationCreateRequest req) {
-        // Chuẩn hóa kiểu từ DTO
-        final Long eventIdLong = Long.valueOf(String.valueOf(req.getEventId())); // int -> Long an toàn
-        final Integer studentIdInt = Math.toIntExact(req.getStudentId()); // Long -> Integer
+        // Đồng nhất Long
+        final Long eventId = req.getEventId();
+        final Long studentId = req.getStudentId();
 
         // 1) Event tồn tại?
-        EntityEvents event = events.findById(eventIdLong)
-                .orElseThrow(() -> new IllegalArgumentException("Event not found: " + req.getEventId()));
+        EntityEvents event = events.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Event not found: " + eventId));
 
         // 2) User tồn tại?
-        EntityUser user = users.findById(studentIdInt) // repo users nhận Integer
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + req.getStudentId()));
+        EntityUser user = users.findById(studentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "User not found: " + studentId));
 
-        // 3) Không cho trùng
-        if (registrations.existsByEventIdAndStudentId(
-                Math.toIntExact(event.getEventId()), // Long -> Integer (nếu repo yêu cầu)
-                user.getUser_id())) {
-            throw new IllegalStateException("Student already registered for this event");
+        // 3) Không cho trùng (chặn sớm)
+        if (registrations.existsByEventIdAndStudentId(event.getEventId(), studentId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Already registered");
         }
 
-        // 4) Kiểm tra sức chứa (nếu có) -> dùng atomic update, bỏ count CONFIRMED để
-        // tránh race
-        if (event.getTotalSeats() != null) {
-            int updated = events.tryConsumeSeat(event.getEventId());
-            if (updated == 0) {
-                throw new IllegalStateException("Event is full");
+        // 4) Sự kiện phải mở đăng ký
+        if (event.getStatus() != tmtd.event.events.EventStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Event is not open for registration");
+        }
+
+        // 4.1) Nếu đã từng có bản ghi (ví dụ CANCELLED) → cho đăng ký lại bằng UPDATE
+        var existingOpt = registrations.findFirstByEventIdAndStudentId(event.getEventId(), studentId);
+        if (existingOpt.isPresent()) {
+            var existing = existingOpt.get();
+            if (existing.getStatus() == RegistrationStatus.CONFIRMED
+                    || existing.getStatus() == RegistrationStatus.PENDING) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Already registered");
             }
+            // CANCELLED → trừ ghế 1 lần & UPDATE
+            int rows = events.tryConsumeSeat(event.getEventId());
+            if (rows == 0)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Event is full");
+
+            existing.setStatus(RegistrationStatus.CONFIRMED);
+            var saved = registrations.save(existing);
+
+            publisher.publishEvent(new RegistrationSucceeded(
+                    saved.getRegistrationId(),
+                    saved.getEventId(),
+                    saved.getStudentId(),
+                    user.getEmail(),
+                    event.getTitle()));
+
+            return new RegistrationResponse(
+                    saved.getRegistrationId(),
+                    saved.getEventId(),
+                    saved.getStudentId(),
+                    saved.getStatus(),
+                    saved.getRegisteredOn());
         }
 
-        // 5) Lưu
+        // 5) Trừ ghế **một lần duy nhất** (atomic)
+        int rows = events.tryConsumeSeat(event.getEventId());
+        if (rows == 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Event is full");
+        }
+
+        // 6) Tạo mới
         EntityRegistrations saved = new EntityRegistrations();
         saved.setEventId(event.getEventId()); // Long
-        saved.setStudentId(Long.valueOf(user.getUser_id())); // Integer -> Long
+        saved.setStudentId(studentId); // Long
         saved.setStatus(RegistrationStatus.CONFIRMED);
         saved = registrations.save(saved);
 
-        // 6) Publish event (AFTER_COMMIT)
+        // 7) Publish (AFTER_COMMIT)
         publisher.publishEvent(new RegistrationSucceeded(
                 saved.getRegistrationId(),
                 saved.getEventId(),
-                Long.valueOf(saved.getStudentId()),
+                saved.getStudentId(),
                 user.getEmail(),
                 event.getTitle()));
 
         return new RegistrationResponse(
                 saved.getRegistrationId(),
                 saved.getEventId(),
-                Long.valueOf(saved.getStudentId()),
+                saved.getStudentId(),
                 saved.getStatus(),
                 saved.getRegisteredOn());
+    }
+
+    @Override// xử lí lấy ra sự kiện mà người dùng đã đăng kí 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<tmtd.event.registrations.dto.RegistrationEventItem> listRegisteredEventsOfUser(
+            Long studentId,
+            tmtd.event.registrations.RegistrationStatus status,
+            String whenMode,
+            int page,
+            int size) {
+
+        // Quy tắc quyền: user chỉ xem được của chính mình; ADMIN thì xem của bất kỳ ai
+        // (Nếu AuthFacade của bạn có phương thức lấy userId hiện tại, dùng để kiểm tra)
+        Long currentUserId = auth.currentUserId();
+        boolean isAdmin = auth.hasRole(tmtd.event.config.Roles.ADMIN);
+        if (!isAdmin && (currentUserId == null || !studentId.equals(currentUserId))) {
+            throw new org.springframework.security.access.AccessDeniedException("Not allowed");
+        }
+
+        if (whenMode == null || whenMode.isBlank())
+            whenMode = "ALL";
+        whenMode = whenMode.toUpperCase();
+        var pageable = org.springframework.data.domain.PageRequest.of(
+                Math.max(0, page),
+                Math.min(Math.max(1, size), 100));
+
+        return registrations.findUserRegisteredEvents(
+                studentId,
+                status,
+                whenMode,
+                java.time.LocalDate.now(),
+                pageable);
     }
 
     @Override
@@ -148,7 +217,7 @@ public class ServiceRegistrationsImpl implements ServiceRegistrations {
 
     @Override
     @Transactional(readOnly = true)
-    public List<EntityRegistrations> listByStudent(Integer studentId) {
+    public List<EntityRegistrations> listByStudent(Long studentId) {
         return registrations.findAllByStudentId(studentId);
     }
 
@@ -204,7 +273,7 @@ public class ServiceRegistrationsImpl implements ServiceRegistrations {
                 reg.getRegistrationId(),
                 reg.getEventId(),
                 Long.valueOf(reg.getStudentId()),
-                users.findById(reg.getStudentId().intValue()).map(EntityUser::getEmail).orElse(null),
+                users.findById(reg.getStudentId()).map(EntityUser::getEmail).orElse(null),
                 events.findById(eventId).map(EntityEvents::getTitle).orElse(null)));
 
         return new RegistrationResponse(

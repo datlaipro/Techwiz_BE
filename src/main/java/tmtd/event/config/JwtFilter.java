@@ -1,14 +1,10 @@
 package tmtd.event.config;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
@@ -49,19 +45,22 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         }
 
-        String email = jwtUtil.extractEmail(token);
-        Integer userIdInt = jwtUtil.extractUserId(token);
-        String rolesStr = jwtUtil.extractRoles(token);
+        String email   = jwtUtil.extractEmail(token);
+        Long userId    = jwtUtil.extractUserId(token);   // <-- Long nhất quán
+        String rolesStr= jwtUtil.extractRoles(token);
 
-        List<SimpleGrantedAuthority> authorities = (rolesStr == null || rolesStr.isBlank())
+        List<SimpleGrantedAuthority> authorities =
+            (rolesStr == null || rolesStr.isBlank())
                 ? java.util.Collections.emptyList()
                 : java.util.Arrays.stream(rolesStr.split(","))
-                        .map(String::trim).filter(s -> !s.isEmpty())
-                        .map(SimpleGrantedAuthority::new).toList();
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(SimpleGrantedAuthority::new)
+                    .toList();
 
         log.debug("[JwtFilter] principal={}, rolesStr={}, authorities={}", email, rolesStr, authorities);
 
-        var principal = new UserPrincipal(userIdInt != null ? userIdInt.longValue() : null, email, rolesStr);
+        var principal = new UserPrincipal(userId, email, rolesStr); // <-- dùng Long trực tiếp
         var authentication = new UsernamePasswordAuthenticationToken(principal, null, authorities);
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -107,6 +106,5 @@ public class JwtFilter extends OncePerRequestFilter {
     }
 
     // Principal tối giản để Controller/Service dùng khi cần
-    public record UserPrincipal(Long userId, String email, String roles) {
-    }
+    public record UserPrincipal(Long userId, String email, String roles) {}
 }

@@ -1,31 +1,3 @@
-// package tmtd.event.notifications;
-
-// import lombok.RequiredArgsConstructor;
-// import org.springframework.context.event.EventListener;
-// import org.springframework.stereotype.Component;
-// import tmtd.event.events.dto.SeatsUpdate;
-// import tmtd.event.registrations.events.RegistrationSucceeded;
-// // Nếu có event Cancelled, import thêm
-
-// @Component
-// @RequiredArgsConstructor
-// public class SeatsChangedListener {
-//   private final SeatsBroadcaster broadcaster;
-
-//   @EventListener
-//   public void onRegistrationSucceeded(RegistrationSucceeded e) {
-//     // e nên có eventId, totalSeats, seatsAvailable (bạn có thể cho ServiceEvents trả về để build payload)
-//     SeatsUpdate payload = new SeatsUpdate(
-//         e.eventId(), e.totalSeats(), e.seatsAvailable(), System.currentTimeMillis()
-//     );
-//     broadcaster.broadcastSeats(e.eventId(), payload);
-//   }
-
-//   // @EventListener
-//   // public void onRegistrationCancelled(RegistrationCancelled e) { ... }
-// }
-
-
 package tmtd.event.notifications;
 
 import lombok.RequiredArgsConstructor;
@@ -44,34 +16,37 @@ public class SeatsChangedListener {
 
   @EventListener
   public void onRegistrationSucceeded(RegistrationSucceeded e) {
-    // Lấy lại sự kiện từ DB để có totalSeats và seatsAvailable mới nhất
+    // Lấy lại sự kiện từ DB để có số ghế còn lại mới nhất
     var opt = events.findById(e.eventId());
     if (opt.isEmpty()) return;
 
     var ev = opt.get();
-    int total = ev.getTotalSeats() == null ? 0 : ev.getTotalSeats();
-    int available = ev.getSeatsAvailable() == null ? 0 : ev.getSeatsAvailable();
+    // Hiện tại totalSeats chính là SỐ GHẾ CÒN LẠI
+    Long remaining = ev.getTotalSeats() == null ? 0L : ev.getTotalSeats();
 
     SeatsUpdate payload = new SeatsUpdate(
         e.eventId(),
-        total,
-        available,
+        remaining,   // totalSeats (giữ nguyên vị trí tham số)
+        remaining,   // seatsAvailable (nhưng giờ bằng remaining)
         System.currentTimeMillis()
     );
 
     broadcaster.broadcastSeats(e.eventId(), payload);
   }
 
-  // Nếu có RegistrationCancelled:
+  // Nếu có RegistrationCancelled, xử lý tương tự:
   // @EventListener
   // public void onRegistrationCancelled(RegistrationCancelled e) {
   //   var opt = events.findById(e.eventId());
   //   if (opt.isEmpty()) return;
   //   var ev = opt.get();
-  //   int total = ev.getTotalSeats() == null ? 0 : ev.getTotalSeats();
-  //   int available = ev.getSeatsAvailable() == null ? 0 : ev.getSeatsAvailable();
-  //   SeatsUpdate payload = new SeatsUpdate(e.eventId(), total, available, System.currentTimeMillis());
+  //   Long remaining = ev.getTotalSeats() == null ? 0L : ev.getTotalSeats();
+  //   SeatsUpdate payload = new SeatsUpdate(
+  //       e.eventId(),
+  //       remaining,
+  //       remaining,
+  //       System.currentTimeMillis()
+  //   );
   //   broadcaster.broadcastSeats(e.eventId(), payload);
   // }
 }
-

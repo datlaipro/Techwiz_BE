@@ -5,7 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface JpaUser extends JpaRepository<EntityUser, Integer>
+public interface JpaUser extends JpaRepository<EntityUser, Long>
 // Cùng cấp thì ko cần import file
 {
     // Bạn có thể định nghĩa các phương thức truy vấn tùy chỉnh tại đây

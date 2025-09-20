@@ -22,7 +22,7 @@ public class EntityUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
-    private Integer user_id;
+    private Long user_id;
 
     @Column(nullable = false, length = 150)
     private String fullName;
@@ -67,6 +67,6 @@ public class EntityUser {
     }
 
     // alias
-    public Integer getId() { return this.user_id; }
-    public void setId(Integer id) { this.user_id = id; }
+    public Long getId() { return this.user_id; }
+    public void setId(Long id) { this.user_id = id; }
 }

@@ -6,7 +6,7 @@ import java.time.Instant;
 public record AttendanceResponse(
     Long attendanceId,
     Long eventId,
-    Integer studentId,
+    Long studentId,
     boolean attended,
     Instant markedOn,
     String method

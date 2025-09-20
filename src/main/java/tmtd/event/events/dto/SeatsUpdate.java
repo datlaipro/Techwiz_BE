@@ -2,7 +2,7 @@ package tmtd.event.events.dto;
 
 public record SeatsUpdate(
     Long eventId,
-    int totalSeats,
-    int seatsAvailable,
+    Long totalSeats,
+    Long seatsAvailable,
     long ts
 ) {}

@@ -34,7 +34,7 @@ public class EntityQrTicket {
     private Long eventId;   // FK -> events.event_id (EntityEvents.eventId)
 
     @Column(name = "student_id", nullable = false)
-    private Integer studentId; // FK -> users.user_id (EntityUser.user_id)
+    private Long studentId; // FK -> users.user_id (EntityUser.user_id)
 
     @Column(nullable = false, unique = true, length = 64)
     private String token;   // Mã token QR duy nhất toàn hệ thống
@@ -89,8 +89,8 @@ public class EntityQrTicket {
     public Long getEventId() { return eventId; }
     public void setEventId(Long eventId) { this.eventId = eventId; }
 
-    public Integer getStudentId() { return studentId; }
-    public void setStudentId(Integer studentId) { this.studentId = studentId; }
+    public Long getStudentId() { return studentId; }
+    public void setStudentId(Long studentId) { this.studentId = studentId; }
 
     public String getToken() { return token; }
     public void setToken(String token) { this.token = token; }

@@ -12,18 +12,30 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface JpaQrTicket extends JpaRepository<EntityQrTicket, Long> {
 
-    // [ADD] Tìm vé theo token (để check-in nhanh)
+    // === Lookups cơ bản ===
     Optional<EntityQrTicket> findByToken(String token);
 
-    // [ADD] Tìm vé theo event và student
-    Optional<EntityQrTicket> findByEventIdAndStudentId(Long eventId, Integer studentId);
+    Optional<EntityQrTicket> findByEventIdAndStudentId(Long eventId, Long studentId);
 
-    // [ADD] Kiểm tra vé tồn tại
-    boolean existsByEventIdAndStudentId(Long eventId, Integer studentId);
+    boolean existsByEventIdAndStudentId(Long eventId, Long studentId);
 
-    // [ADD] Đổi trạng thái vé sang REDEEMED nếu hợp lệ (redeem 1 lần)
+    // Vé ACTIVE trước (phục vụ idempotent)
+    Optional<EntityQrTicket> findFirstByEventIdAndStudentIdAndStatus(
+            Long eventId,
+            Long studentId,
+            EntityQrTicket.TicketStatus status);
+
+    // Fallback nếu không quan tâm trạng thái
+    Optional<EntityQrTicket> findFirstByEventIdAndStudentId(Long eventId, Long studentId);
+
+    // === Thống kê / liệt kê ===
+    long countByEventId(Long eventId);
+    List<EntityQrTicket> findAllByEventId(Long eventId);
+    List<EntityQrTicket> findAllByStudentId(Long studentId);
+
+    // === Redeem 1 lần (đổi trạng thái ACTIVE -> REDEEMED nếu còn hiệu lực) ===
     @Transactional
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE EntityQrTicket t
            SET t.status = tmtd.event.qr.EntityQrTicket.TicketStatus.REDEEMED,
@@ -39,13 +51,4 @@ public interface JpaQrTicket extends JpaRepository<EntityQrTicket, Long> {
                    @Param("usedBy") Long usedBy,
                    @Param("usedAt") Instant usedAt,
                    @Param("now") Instant now);
-
-    // [ADD] Đếm tổng vé của một sự kiện
-    long countByEventId(Long eventId);
-
-    // [ADD] Lấy tất cả vé theo sự kiện
-    List<EntityQrTicket> findAllByEventId(Long eventId);
-
-    // [ADD] Lấy tất cả vé theo học viên
-    List<EntityQrTicket> findAllByStudentId(Integer studentId);
 }

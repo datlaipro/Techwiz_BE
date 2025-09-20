@@ -56,10 +56,10 @@ public class AuthController {
 
 class AuthResponse {
     private String token;
-    private int userId;
+    private Long userId;
     private String email;
 
-    public AuthResponse(String token, int userId, String email) {
+    public AuthResponse(String token, Long userId, String email) {
         this.token = token;
         this.userId = userId;
         this.email = email;
@@ -69,7 +69,7 @@ class AuthResponse {
         return token;
     }
 
-    public int getUserId() {
+    public Long getUserId() {
         return userId;
     }
 

@@ -1,5 +1,4 @@
 
-
 package tmtd.event.events;
 
 import java.time.Instant;
@@ -51,7 +50,8 @@ public class EntityEvents {
     @Column(length = 100)
     private String venue;
 
-    // Người tổ chức (FK Users.user_id) – dùng số nguyên để tránh phụ thuộc module users
+    // Người tổ chức (FK Users.user_id) – dùng số nguyên để tránh phụ thuộc module
+    // users
     @Column(nullable = false)
     private Long organizerId;
 
@@ -67,11 +67,12 @@ public class EntityEvents {
     private Instant approvedAt;
 
     // Sức chứa thiết kế (có thể null nếu không giới hạn)
-    private Integer totalSeats;
+    @Column(name = "total_seats")
+    private Long totalSeats;
 
-    // GHẾ CÒN TRỐNG: dùng để trừ/bù khi đăng ký/hủy
-    @Column(name = "seats_available", nullable = false)
-    private Integer seatsAvailable = 0;
+    // // GHẾ CÒN TRỐNG: dùng để trừ/bù khi đăng ký/hủy
+    // @Column(name = "seats_available", nullable = false)
+    // private Long seatsAvailable = 0L;
 
     // Ảnh đại diện chính (thumbnail/banner)
     @Column(name = "main_image_url", length = 512)
@@ -102,8 +103,10 @@ public class EntityEvents {
 
     @PrePersist
     public void onCreate() {
-        if (createdAt == null) createdAt = OffsetDateTime.now();
-        if (updatedAt == null) updatedAt = createdAt;
+        if (createdAt == null)
+            createdAt = OffsetDateTime.now();
+        if (updatedAt == null)
+            updatedAt = createdAt;
     }
 
     @PreUpdate
@@ -112,61 +115,151 @@ public class EntityEvents {
     }
 
     // ===== Getters/Setters =====
-    public Long getEventId() { return eventId; }
-    public void setEventId(Long eventId) { this.eventId = eventId; }
+    public Long getEventId() {
+        return eventId;
+    }
 
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public void setEventId(Long eventId) {
+        this.eventId = eventId;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getTitle() {
+        return title;
+    }
 
-    public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
-    public LocalDate getDate() { return date; }
-    public void setDate(LocalDate date) { this.date = date; }
+    public String getDescription() {
+        return description;
+    }
 
-    public LocalTime getTime() { return time; }
-    public void setTime(LocalTime time) { this.time = time; }
+    public void setDescription(String description) {
+        this.description = description;
+    }
 
-    public String getVenue() { return venue; }
-    public void setVenue(String venue) { this.venue = venue; }
+    public String getCategory() {
+        return category;
+    }
 
-    public Long getOrganizerId() { return organizerId; }
-    public void setOrganizerId(Long organizerId) { this.organizerId = organizerId; }
+    public void setCategory(String category) {
+        this.category = category;
+    }
 
-    public EventStatus getStatus() { return status; }
-    public void setStatus(EventStatus status) { this.status = status; }
+    public LocalDate getDate() {
+        return date;
+    }
 
-    public Long getApprovedBy() { return approvedBy; }
-    public void setApprovedBy(Long approvedBy) { this.approvedBy = approvedBy; }
+    public void setDate(LocalDate date) {
+        this.date = date;
+    }
 
-    public Instant getApprovedAt() { return approvedAt; }
-    public void setApprovedAt(Instant approvedAt) { this.approvedAt = approvedAt; }
+    public LocalTime getTime() {
+        return time;
+    }
 
-    public Integer getTotalSeats() { return totalSeats; }
-    public void setTotalSeats(Integer totalSeats) { this.totalSeats = totalSeats; }
+    public void setTime(LocalTime time) {
+        this.time = time;
+    }
 
-    public Integer getSeatsAvailable() { return seatsAvailable; }
-    public void setSeatsAvailable(Integer seatsAvailable) { this.seatsAvailable = seatsAvailable; }
+    public String getVenue() {
+        return venue;
+    }
 
-    public String getMainImageUrl() { return mainImageUrl; }
-    public void setMainImageUrl(String mainImageUrl) { this.mainImageUrl = mainImageUrl; }
+    public void setVenue(String venue) {
+        this.venue = venue;
+    }
 
-    public Long getVersion() { return version; }
-    public void setVersion(Long version) { this.version = version; }
+    public Long getOrganizerId() {
+        return organizerId;
+    }
 
-    public OffsetDateTime getCreatedAt() { return createdAt; }
-    public OffsetDateTime getUpdatedAt() { return updatedAt; }
+    public void setOrganizerId(Long organizerId) {
+        this.organizerId = organizerId;
+    }
 
-    public List<EntityImage> getImages() { return images; }
-    public void setImages(List<EntityImage> images) { this.images = images; }
+    public EventStatus getStatus() {
+        return status;
+    }
 
-    public LocalDate getStartDate() { return startDate; }
-    public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
+    public void setStatus(EventStatus status) {
+        this.status = status;
+    }
 
-    public LocalDate getEndDate() { return endDate; }
-    public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
+    public Long getApprovedBy() {
+        return approvedBy;
+    }
+
+    public void setApprovedBy(Long approvedBy) {
+        this.approvedBy = approvedBy;
+    }
+
+    public Instant getApprovedAt() {
+        return approvedAt;
+    }
+
+    public void setApprovedAt(Instant approvedAt) {
+        this.approvedAt = approvedAt;
+    }
+
+    public Long getTotalSeats() {
+        return totalSeats;
+    }
+
+    public void setTotalSeats(Long totalSeats) {
+        this.totalSeats = totalSeats;
+    }
+
+    // public Long getSeatsAvailable() { return seatsAvailable; }
+    // public void setSeatsAvailable(Long seatsAvailable) { this.seatsAvailable =
+    // seatsAvailable; }
+
+    public String getMainImageUrl() {
+        return mainImageUrl;
+    }
+
+    public void setMainImageUrl(String mainImageUrl) {
+        this.mainImageUrl = mainImageUrl;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public OffsetDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public List<EntityImage> getImages() {
+        return images;
+    }
+
+    public void setImages(List<EntityImage> images) {
+        this.images = images;
+    }
+
+    public LocalDate getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+    }
+
+    public LocalDate getEndDate() {
+        return endDate;
+    }
+
+    public void setEndDate(LocalDate endDate) {
+        this.endDate = endDate;
+    }
 }
-

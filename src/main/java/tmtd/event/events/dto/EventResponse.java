@@ -52,9 +52,9 @@ public record EventResponse(
         EventStatus status,
         Long approvedBy,
         Instant approvedAt,
-        Integer totalSeats,   // DTO giữ Integer
+        Long totalSeats,   // DTO giữ Integer
         String mainImageUrl,
-        Integer version       // DTO giữ Integer
+        Long version       // DTO giữ Integer
 ) {
     public static EventResponse from(EntityEvents e) {
         return new EventResponse(
@@ -72,10 +72,10 @@ public record EventResponse(
                 e.getApprovedBy(),
                 e.getApprovedAt(),
                 // 🔽 e.getTotalSeats() có thể là Long -> ép về Integer an toàn
-                e.getTotalSeats() == null ? null : Math.toIntExact(e.getTotalSeats()),
+                e.getTotalSeats() == null ? null : (e.getTotalSeats()),
                 e.getMainImageUrl(),
                 // 🔽 e.getVersion() có thể là Long -> ép về Integer an toàn
-                e.getVersion() == null ? null : Math.toIntExact(e.getVersion())
+                e.getVersion() == null ? null : (e.getVersion())
         );
     }
 }

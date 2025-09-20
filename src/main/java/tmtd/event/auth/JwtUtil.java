@@ -1,10 +1,10 @@
-
 package tmtd.event.auth;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
 import javax.crypto.SecretKey;
 import java.util.Date;
 
@@ -17,7 +17,7 @@ public class JwtUtil {
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    public String generateToken(String email, String roles, int userId) {
+    public String generateToken(String email, String roles, Long userId) {
         return Jwts.builder()
                 .subject(email)
                 .issuedAt(new Date())
@@ -29,7 +29,10 @@ public class JwtUtil {
     }
 
     public String extractEmail(String token) {
-        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload().getSubject();
+        return Jwts.parser().verifyWith(key).build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
     }
 
     public String extractRoles(String token) {
@@ -41,13 +44,14 @@ public class JwtUtil {
                 .get("roles", String.class);
     }
 
-    public Integer extractUserId(String token) {
-        return Jwts.parser()
+    public Long extractUserId(String token) {
+        Object v = Jwts.parser()
                 .verifyWith(key)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload()
-                .get("userId", Integer.class); // Lấy userId dưới dạng Integer
+                .get("userId"); // Lấy userId dưới dạng Long
+        return (v == null) ? null : ((Number) v).longValue();
     }
 
     public boolean validateToken(String token) {
@@ -67,5 +71,4 @@ public class JwtUtil {
         }
         return false;
     }
-
 }

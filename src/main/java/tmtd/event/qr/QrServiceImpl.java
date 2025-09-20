@@ -1,8 +1,9 @@
 package tmtd.event.qr;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;  
+import org.springframework.transaction.annotation.Transactional;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
@@ -12,12 +13,10 @@ import com.google.zxing.qrcode.QRCodeWriter;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.UUID;
-import java.util.Map; 
-import java.awt.image.BufferedImage;          // ✅ THÊM
-import java.io.ByteArrayOutputStream;
+import java.util.*;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import javax.imageio.ImageIO;
 
 import tmtd.event.qr.EntityQrTicket.TicketStatus;
@@ -30,39 +29,101 @@ public class QrServiceImpl implements QrService {
 
     private final JpaQrTicket jpaQrTicket;
 
-    // PNG 1x1 trong suốt (Base64) – ảnh placeholder hợp lệ cho endpoint
-    // produces=IMAGE_PNG
-    private static byte[] png1x1() {
-        String b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGNgAAAABgAB5SfUogAAAABJRU5ErkJggg==";
-        return Base64.getDecoder().decode(b64);
+    private static final int MIN_SIZE = 128;
+    private static final int MAX_SIZE = 640;
+
+    private int clampSize(int size) {
+        int s = (size <= 0 ? 256 : size);
+        return Math.max(MIN_SIZE, Math.min(s, MAX_SIZE));
     }
 
-    // ✅ CHỮ KÝ KHỚP INTERFACE: (Long, Long, Integer)
+    private boolean notExpired(EntityQrTicket t) {
+        Instant exp = t.getExpiresAt();
+        return exp == null || exp.isAfter(Instant.now());
+    }
+
+    /* ---------------- QrService API ---------------- */
+
     @Override
-    public byte[] issueTicketPng(Long eventId, Long studentId, Integer size) {
-        // 1) tạo token & lưu ticket như bạn đang làm
-        String token = UUID.randomUUID().toString().replace("-", "");
+    @Transactional(readOnly = true)
+    public Optional<EntityQrTicket> findActive(Long eventId, Long studentId) {
+        return jpaQrTicket
+            .findFirstByEventIdAndStudentIdAndStatus(eventId, studentId, TicketStatus.ACTIVE)
+            .filter(this::notExpired);
+    }
 
-        var ticket = new EntityQrTicket();
-        ticket.setEventId(eventId);
-        ticket.setStudentId(Math.toIntExact(studentId));
-        ticket.setToken(token);
-        ticket.setStatus(TicketStatus.ACTIVE);
-        jpaQrTicket.save(ticket);
-
-        // 2) render ảnh QR từ chính token (hoặc payload khác)
-        int px = (size == null || size < 128) ? 256 : size;
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] pngFromToken(String token, int size) {
+        int px = clampSize(size);
         return renderQR(token, px);
     }
 
+    @Override
+    public byte[] issueTicketPng(Long eventId, Long studentId, int size) {
+        int px = clampSize(size);
+
+        // 1) Idempotent: nếu đã có vé ACTIVE và còn hạn -> dùng lại
+        Optional<EntityQrTicket> existed = findActive(eventId, studentId);
+        if (existed.isPresent()) {
+            return renderQR(existed.get().getToken(), px);
+        }
+
+        // 2) Tạo mới (có thể gặp race-condition unique key)
+        String token = UUID.randomUUID().toString().replace("-", "");
+        EntityQrTicket ticket = new EntityQrTicket();
+        ticket.setEventId(eventId);
+        ticket.setStudentId(studentId);
+        ticket.setToken(token);
+        ticket.setStatus(TicketStatus.ACTIVE);
+        // KHÔNG gọi setIssuedOn(...) vì entity không có setter này
+
+        try {
+            jpaQrTicket.save(ticket);
+            return renderQR(token, px);
+
+        } catch (DataIntegrityViolationException dup) {
+            // 3) Nếu trùng unique (đã có vé được tạo song song) -> lấy lại vé ACTIVE để render
+            return findActive(eventId, studentId)
+                .map(t -> renderQR(t.getToken(), px))
+                .orElseThrow(() -> dup);
+        }
+    }
+
+    @Override
+    public QrRedeemResponse redeem(String token, Long eventId) {
+        var ticket = jpaQrTicket.findByToken(token)
+            .orElseThrow(() -> new IllegalArgumentException("Invalid QR token"));
+
+        if (!Objects.equals(ticket.getEventId(), eventId)) {
+            return new QrRedeemResponse(false, "Event mismatch", null, null);
+        }
+        if (ticket.getStatus() == TicketStatus.REDEEMED) {
+            return new QrRedeemResponse(false, "Already redeemed",
+                    ticket.getEventId(), ticket.getStudentId());
+        }
+        if (!notExpired(ticket)) {
+            return new QrRedeemResponse(false, "QR expired",
+                    ticket.getEventId(), ticket.getStudentId());
+        }
+
+        ticket.setStatus(TicketStatus.REDEEMED);
+        ticket.setUsedAt(Instant.now());
+        jpaQrTicket.save(ticket);
+
+        return new QrRedeemResponse(true, "OK",
+                ticket.getEventId(), ticket.getStudentId());
+    }
+
+    /* ---------------- Helpers ---------------- */
+
     private byte[] renderQR(String content, int size) {
         try {
-            var hints = Map.of(
-                    EncodeHintType.CHARACTER_SET, StandardCharsets.UTF_8.name(),
-                    EncodeHintType.MARGIN, 1 // viền nhỏ cho QR gọn
-            );
-            var writer = new QRCodeWriter();
-            BitMatrix matrix = writer.encode(content, BarcodeFormat.QR_CODE, size, size, hints);
+            Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
+            hints.put(EncodeHintType.CHARACTER_SET, StandardCharsets.UTF_8.name());
+            hints.put(EncodeHintType.MARGIN, 1);
+
+            BitMatrix matrix = new QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints);
             BufferedImage image = MatrixToImageWriter.toBufferedImage(matrix);
             try (var baos = new ByteArrayOutputStream()) {
                 ImageIO.write(image, "png", baos);
@@ -71,28 +132,5 @@ public class QrServiceImpl implements QrService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to render QR", e);
         }
-    }
-
-    // ✅ CHỮ KÝ KHỚP INTERFACE (giữ nguyên nếu interface của bạn là redeem(String,
-    // Long))
-    @Override
-    public QrRedeemResponse redeem(String token, Long eventId) {
-        var ticket = jpaQrTicket.findByToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid QR token"));
-
-        if (!ticket.getEventId().equals(eventId)) {
-            return new QrRedeemResponse(false, "Event mismatch", null, null);
-        }
-        if (ticket.getStatus() == TicketStatus.REDEEMED) {
-            return new QrRedeemResponse(false, "Already redeemed",
-                    ticket.getEventId(), ticket.getStudentId());
-        }
-
-        ticket.setStatus(TicketStatus.REDEEMED); // entity dùng REDEEMED
-        ticket.setUsedAt(Instant.now()); // dùng usedAt thay vì redeemedAt
-        jpaQrTicket.save(ticket);
-
-        return new QrRedeemResponse(true, "OK",
-                ticket.getEventId(), ticket.getStudentId());
     }
 }
