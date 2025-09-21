@@ -1,6 +1,8 @@
 
 package tmtd.event.registrations;
 
+
+import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,12 +21,14 @@ import tmtd.event.registrations.dto.RegistrationResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.data.domain.Page;
-
+import tmtd.event.registrations.JpaRegistrations;
 
 @RestController
 @RequestMapping("/api/registrations")
 @RequiredArgsConstructor
 public class ControllerRegistrationsApi {
+
+      private final JpaRegistrations statsRepo;
 
     private final JpaEvents events;
     private final ServiceRegistrations service;
@@ -69,7 +73,7 @@ public class ControllerRegistrationsApi {
         return service.cancelOwnRegistration(regId, auth.currentUserId());
     }
 
-    @GetMapping("/users/{userId}/events")// api trả về thông tin các sự kiện mà user đã đăng kí 
+    @GetMapping("/users/{userId}/events") // api trả về thông tin các sự kiện mà user đã đăng kí
     @PreAuthorize("hasAnyRole('USER','ORGANIZER','ADMIN')")
     public Page<RegistrationEventItem> listUserRegisteredEvents(
             @PathVariable Long userId,
@@ -81,5 +85,6 @@ public class ControllerRegistrationsApi {
         // là ADMIN)
         return service.listRegisteredEventsOfUser(userId, status, whenMode, page, size);
     }
+
 
 }

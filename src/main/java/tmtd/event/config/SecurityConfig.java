@@ -101,7 +101,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/events").denyAll()
 
                         // Đăng ký
-                        .requestMatchers(HttpMethod.POST, "/api/registrations").hasRole(Roles.USER)
+                        .requestMatchers(HttpMethod.POST, "/api/registrations").hasAnyRole("USER","ORGANIZER","ADMIN")
                         .requestMatchers("/api/registrations/**").authenticated()
 
                         // Còn lại yêu cầu JWT

@@ -33,22 +33,22 @@ public interface JpaQrTicket extends JpaRepository<EntityQrTicket, Long> {
     List<EntityQrTicket> findAllByEventId(Long eventId);
     List<EntityQrTicket> findAllByStudentId(Long studentId);
 
-    // === Redeem 1 lần (đổi trạng thái ACTIVE -> REDEEMED nếu còn hiệu lực) ===
+    // === Redeem 1 lần (ACTIVE -> REDEEMED nếu còn hiệu lực) ===
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE EntityQrTicket t
-           SET t.status = tmtd.event.qr.EntityQrTicket.TicketStatus.REDEEMED,
+           SET t.status = tmtd.event.qr.EntityQrTicket$TicketStatus.REDEEMED,
                t.usedAt = :usedAt,
                t.usedBy = :usedBy
          WHERE t.token = :token
-           AND t.eventId = :eventId
-           AND t.status = tmtd.event.qr.EntityQrTicket.TicketStatus.ACTIVE
+           AND (:eventId IS NULL OR t.eventId = :eventId)
+           AND t.status = tmtd.event.qr.EntityQrTicket$TicketStatus.ACTIVE
            AND (t.expiresAt IS NULL OR t.expiresAt > :now)
     """)
     int redeemOnce(@Param("token") String token,
-                   @Param("eventId") Long eventId,
-                   @Param("usedBy") Long usedBy,
+                   @Param("eventId") Long eventId,     // có thể null
+                   @Param("usedBy") Long usedBy,       // có thể null (ai quét)
                    @Param("usedAt") Instant usedAt,
                    @Param("now") Instant now);
 }

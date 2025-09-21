@@ -5,4 +5,6 @@ public record QrRedeemResponse(
     String message,
     Long eventId,       // ✅ mới
     Long studentId   // ✅ mới
-) {}
+) {
+    
+}

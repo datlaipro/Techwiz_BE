@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-
 public interface JpaRegistrations extends JpaRepository<EntityRegistrations, Long> {
 
   // Kiểm tra học viên đã đăng ký sự kiện chưa
@@ -55,5 +54,6 @@ public interface JpaRegistrations extends JpaRepository<EntityRegistrations, Lon
       @org.springframework.data.repository.query.Param("whenMode") String whenMode, // ALL | UPCOMING | PAST
       @org.springframework.data.repository.query.Param("today") java.time.LocalDate today,
       org.springframework.data.domain.Pageable pageable);
+
 
 }

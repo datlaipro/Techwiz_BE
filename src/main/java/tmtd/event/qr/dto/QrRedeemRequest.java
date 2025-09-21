@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
  * - eventId: ID sự kiện để xác thực vé thuộc sự kiện nào
  */
 public record QrRedeemRequest(
-        @NotBlank String token,        // [ADD] Bắt buộc: mã token QR
-        @NotNull @Min(1) Long eventId  // [ADD] Bắt buộc: ID sự kiện
-) {}
+                @NotBlank String token, // [ADD] Bắt buộc: mã token QR
+                @Min(1) Long eventId // [ADD] Bắt buộc: ID sự kiện
+) {
+}
